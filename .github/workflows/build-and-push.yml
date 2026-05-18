@@ -65,8 +65,7 @@ jobs:
         with:
           context: .
           tags: |
-            ghcr.io/ValentinHerrmann/artemis-maven-docker:${{ steps.compute-tag.outputs.result }}
+            ghcr.io/valentinherrmann/artemis-maven-docker:${{ steps.compute-tag.outputs.result }}
           platforms: linux/amd64,linux/arm64/v8
           push: ${{ !startsWith(steps.compute-tag.outputs.result, 'pr-') }}
 
-          
