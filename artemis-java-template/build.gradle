@@ -13,17 +13,6 @@ plugins {
 apply plugin: "java"
 apply plugin: "org.checkerframework"
 
-def javafxPlatform
-if (osName.contains('win')) {
-    javafxPlatform = 'win'
-} else if (osName.contains('mac')) {
-    javafxPlatform = isArm64 ? 'mac-aarch64' : 'mac'
-} else if (osName.contains('linux')) {
-    javafxPlatform = isArm64 ? 'linux-aarch64' : 'linux'
-} else {
-    throw new GradleException("Unsupported OS for JavaFX: ${osName} ${osArch}")
-}
-
 repositories {
     mavenCentral()
     mavenLocal()
@@ -32,17 +21,7 @@ repositories {
 dependencies {
     testImplementation "de.tum.in.ase:artemis-java-test-sandbox:1.15.0"
     testImplementation "net.bytebuddy:byte-buddy:1.17.6"
-    testImplementation 'org.assertj:assertj-core:3.24.2'
-    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
-    testImplementation 'org.junit.platform:junit-platform-launcher:1.10.2'
-    testImplementation 'de.tum.in.ase:artemis-java-test-sandbox:1.15.0'
     implementation "de.blockly2java:graphics:[0.3.0,)"
-
-    // JavaFX dependencies — use platform classifiers so actual JARs resolve
-    testImplementation "org.openjfx:javafx-base:26:${javafxPlatform}"
-    testImplementation "org.openjfx:javafx-controls:26:${javafxPlatform}"
-    testImplementation "org.openjfx:javafx-graphics:26:${javafxPlatform}"
-
     implementation "org.apache.commons:commons-lang3:${commons_lang3_version}"
 
     // NOTE: for some reason, we cannot switch to the latest version here, then pmd would fail with a classloading error
