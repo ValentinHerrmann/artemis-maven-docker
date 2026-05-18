@@ -1,143 +1,314 @@
 plugins {
-    id "checkstyle"
-    id "pmd"
-    id "com.github.spotbugs" version "6.3.0"
-    id "maven-publish"
-    id "com.teamscale" version "35.2.1"
-    id "org.openjfx.javafxplugin" version "0.1.0"
-    id "org.springframework.boot" version "3.5.4"
-    id "io.spring.dependency-management" version "1.1.7"
-    id "org.checkerframework" version "0.6.56"
+    id 'java-library'
+    id 'jacoco'
 }
 
-apply plugin: "java"
-apply plugin: "org.checkerframework"
+// ---------------------------------------------------------------------------
+// Configurable properties (mirrors Maven pom.xml properties)
+// ---------------------------------------------------------------------------
+def exerciseTestArtifactId = findProperty('exerciseTestArtifactId') ?: 'gassi_tests'
+def exerciseTestVersion = findProperty('exerciseTestVersion') ?: '[0.1.0,)'
+def glassPlatform = findProperty('glass.platform') ?: 'Headless'
+def osName = System.getProperty('os.name').toLowerCase(Locale.ROOT)
+def osArch = System.getProperty('os.arch').toLowerCase(Locale.ROOT)
+def isArm64 = osArch.contains('aarch64') || osArch.contains('arm64')
+def javafxPlatform
+if (osName.contains('win')) {
+    javafxPlatform = 'win'
+} else if (osName.contains('mac')) {
+    javafxPlatform = isArm64 ? 'mac-aarch64' : 'mac'
+} else if (osName.contains('linux')) {
+    javafxPlatform = isArm64 ? 'linux-aarch64' : 'linux'
+} else {
+    throw new GradleException("Unsupported OS for JavaFX: ${osName} ${osArch}")
+}
 
+// ---------------------------------------------------------------------------
+// Group, Artifact, Version (mirrors Maven groupId/artifactId/version)
+// ---------------------------------------------------------------------------
+group = 'b2j'
+version = '1.0'
+
+// ---------------------------------------------------------------------------
+// Java configuration
+// ---------------------------------------------------------------------------
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Repositories
+// ---------------------------------------------------------------------------
 repositories {
     mavenCentral()
-    mavenLocal()
-}
-
-dependencies {
-    testImplementation "de.tum.in.ase:artemis-java-test-sandbox:1.15.0"
-    testImplementation "net.bytebuddy:byte-buddy:1.17.6"
-
-    implementation "org.apache.commons:commons-lang3:${commons_lang3_version}"
-
-    // NOTE: for some reason, we cannot switch to the latest version here, then pmd would fail with a classloading error
-//    pmd "org.apache.commons:commons-lang3:${commons_lang3_version}"
-    checkstyle "org.apache.commons:commons-lang3:${commons_lang3_version}"
-    checkstyle "com.puppycrawl.tools:checkstyle:${checkstyle_version}"
-    spotbugs "org.apache.commons:commons-lang3:${commons_lang3_version}"
-}
-
-def assignmentSrcDir = "assignment/src"
-def studentOutputDir = sourceSets.main.java.destinationDirectory.get()
-def scaConfigDirectory = "$projectDir/staticCodeAnalysisConfig"
-
-compileJava.options.encoding = "UTF-8"
-compileTestJava.options.encoding = "UTF-8"
-
-sourceSets {
-    test {
-        java {
-            srcDir "test"
-        }
-        resources {
-            srcDir "test"
-        }
+    maven {
+        url = uri('https://central.sonatype.com/repository/maven-snapshots')
     }
+}
 
+// ---------------------------------------------------------------------------
+// Dependencies
+// ---------------------------------------------------------------------------
+dependencies {
+    testImplementation 'org.assertj:assertj-core:3.24.2'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+    testImplementation 'org.junit.platform:junit-platform-launcher:1.10.2'
+    testImplementation 'de.tum.in.ase:artemis-java-test-sandbox:1.15.0'
+    testImplementation "de.blockly2java.exercises:${exerciseTestArtifactId}:${exerciseTestVersion}"
+    implementation "de.blockly2java:graphics:[0.3.0,)"
+
+    // JavaFX dependencies — use platform classifiers so actual JARs resolve
+    testImplementation "org.openjfx:javafx-base:26:${javafxPlatform}"
+    testImplementation "org.openjfx:javafx-controls:26:${javafxPlatform}"
+    testImplementation "org.openjfx:javafx-graphics:26:${javafxPlatform}"
+}
+
+// ---------------------------------------------------------------------------
+// Source sets — mirrors Maven sourceDirectory / testSourceDirectory
+// ---------------------------------------------------------------------------
+sourceSets {
     main {
         java {
-            srcDirs = [assignmentSrcDir]
+            srcDirs = ['assignment/src']
         }
         resources {
-            srcDirs = []
+            srcDirs = ['assignment/src']
+        }
+    }
+    solution {
+        java {
+            srcDirs = ['../solution/src']
+        }
+        resources {
+            srcDirs = ['../solution/src']
+        }
+    }
+    template {
+        java {
+            srcDirs = ['../template/src']
+        }
+        resources {
+            srcDirs = ['../template/src']
+        }
+    }
+    test {
+        java {
+            srcDirs = ['test-disabled']
+        }
+        resources {
+            srcDirs = ['test-disabled']
         }
     }
 }
 
-def forbiddenPackageFolders = [ //(2)
-                                "$studentOutputDir/ch/qos/logback/",
-                                "$studentOutputDir/com/intellij/",
-                                "$studentOutputDir/com/sun/",
-                                "$studentOutputDir/de/tum/in/test/api/",
-                                "$studentOutputDir/java/",
-                                "$studentOutputDir/javax/",
-                                "$studentOutputDir/jdk/",
-                                "$studentOutputDir/net/jqwik/",
-                                "$studentOutputDir/org/assertj/",
-                                "$studentOutputDir/org/apache/",
-                                "$studentOutputDir/org/eclipse/",
-                                "$studentOutputDir/org/gradle/",
-                                "$studentOutputDir/org/jacoco/",
-                                "$studentOutputDir/org/json/",
-                                "$studentOutputDir/org/junit/",
-                                "$studentOutputDir/org/opentest4j/",
-                                "$studentOutputDir/sun/",
-                                "$studentOutputDir/worker/org/gradle/"
-]
+// ---------------------------------------------------------------------------
+// Configuration extensions for custom source sets
+// ---------------------------------------------------------------------------
+configurations.named('solutionImplementation') {
+    extendsFrom(configurations.getByName('implementation'))
+}
+configurations.named('solutionRuntimeOnly') {
+    extendsFrom(configurations.getByName('runtimeOnly'))
+}
+configurations.named('templateImplementation') {
+    extendsFrom(configurations.getByName('implementation'))
+}
+configurations.named('templateRuntimeOnly') {
+    extendsFrom(configurations.getByName('runtimeOnly'))
+}
+
+// ---------------------------------------------------------------------------
+// Extract TestManager from gassi_tests dependency into test output
+// (equivalent to Maven Surefire's dependenciesToScan)
+// ---------------------------------------------------------------------------
+def gassiTestJar = configurations.testRuntimeClasspath.find { it.name.contains('gassi_tests') }
+
+task extractTestManager(type: Copy) {
+    description = 'Extract TestManager from gassi_tests dependency for Gradle test discovery'
+    group = 'verification'
+
+    dependsOn configurations.testRuntimeClasspath
+
+    from zipTree(gassiTestJar)
+    into layout.buildDirectory.dir('classes/java/test')
+
+    include 'b2j/test/TestManager.class'
+}
+
+// Make testClasses depend on extracted TestManager
+tasks.named('testClasses') {
+    dependsOn extractTestManager
+}
+
+// ---------------------------------------------------------------------------
+// JavaFX module path argument provider
+// ---------------------------------------------------------------------------
+abstract class JavaFxModulePathArgumentProvider implements CommandLineArgumentProvider {
+    @InputFiles
+    @SkipWhenEmpty
+    @PathSensitive(PathSensitivity.NONE)
+    abstract ConfigurableFileCollection getJavaFxJars()
+
+    @Override
+    Iterable<String> asArguments() {
+        def javafxJars = javaFxJars.files.findAll {
+            it.name.startsWith('javafx-') && it.name.endsWith('.jar')
+        }
+        def modulePath = javafxJars.collect { it.absolutePath }.join(File.pathSeparator)
+        return [
+            '--module-path', modulePath,
+            '--add-modules', 'javafx.controls,javafx.graphics,javafx.base'
+        ]
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Test task configuration (default: student assignment)
+// ---------------------------------------------------------------------------
 test {
-    doFirst { //(1)
-        for (String packageFolder in forbiddenPackageFolders) {
-            assert !file(packageFolder).exists(): "$packageFolder must not exist within the submission."
-        }
-    }
-    defaultCharacterEncoding = "UTF-8"
+    testClassesDirs = sourceSets.test.output + files(layout.buildDirectory.dir('classes/java/test'))
+
     useJUnitPlatform()
+
+    // Pass glass.platform system property (default: Headless)
+    systemProperty 'glass.platform', glassPlatform
+
+    // Add JavaFX to module path (JavaFX 26 JARs are modular)
+    jvmArgs '-Dfile.encoding=UTF-8',
+            '-Djunit.jupiter.execution.parallel.enabled=false',
+            '--enable-native-access', 'ALL-UNNAMED'
+
+    // Inject JavaFX module path dynamically
+    def javaFxArgProvider = objects.newInstance(JavaFxModulePathArgumentProvider)
+    javaFxArgProvider.javaFxJars.from(configurations.testRuntimeClasspath)
+    jvmArgumentProviders.add(javaFxArgProvider)
+
+    // Include only the TestManager class (mirrors Surefire include pattern)
+    include '**/b2j/test/TestManager.class'
+
+    finalizedBy jacocoTestReport
 }
 
-checkstyle {
-    configFile = file("$scaConfigDirectory/checkstyle-configuration.xml")
-    ignoreFailures = true
-    // exclude the test files
-    checkstyleTest.enabled = false
-    checkstyleMain.reports {
-        xml.outputLocation = file("target/checkstyle-result.xml")
-    }
+// ---------------------------------------------------------------------------
+// Convenience tasks for testing with different source directories
+// (mirrors Maven profiles: default, solution, template)
+// ---------------------------------------------------------------------------
+
+task testSolution(type: Test) {
+    description = 'Run tests against the solution source code (mirrors Maven solution profile)'
+    group = 'verification'
+
+    // Depend on extracting TestManager from gassi_tests dependency
+    dependsOn extractTestManager
+
+    // Scan both test output and extracted TestManager
+    testClassesDirs = sourceSets.test.output + files(layout.buildDirectory.dir('classes/java/test'))
+
+    // Use solution output + dependencies only (no assignment classes)
+    classpath = sourceSets.test.output + sourceSets.solution.output + configurations.solutionRuntimeClasspath + configurations.testRuntimeClasspath
+
+    useJUnitPlatform()
+    systemProperty 'glass.platform', glassPlatform
+    jvmArgs '-Dfile.encoding=UTF-8',
+            '-Djunit.jupiter.execution.parallel.enabled=false',
+            '--enable-native-access', 'ALL-UNNAMED'
+
+    // Inject JavaFX module path dynamically
+    def javaFxArgProvider = objects.newInstance(JavaFxModulePathArgumentProvider)
+    javaFxArgProvider.javaFxJars.from(configurations.testRuntimeClasspath)
+    jvmArgumentProviders.add(javaFxArgProvider)
+    include '**/b2j/test/TestManager.class'
+    finalizedBy jacocoTestReport
 }
 
-spotbugs {
-    excludeFilter = file("$scaConfigDirectory/spotbugs-exclusions.xml")
-    ignoreFailures = true
-    // exclude the test files
-    spotbugsTest.enabled = false
-    spotbugsMain.reports {
-        xml {
-            required.set(true)
-            outputLocation.set(file("target/spotbugsXml.xml"))
+task testTemplate(type: Test) {
+    description = 'Run tests against the template source code (mirrors Maven template profile)'
+    group = 'verification'
+
+    // Depend on extracting TestManager from gassi_tests dependency
+    dependsOn extractTestManager
+
+    // Scan both test output and extracted TestManager
+    testClassesDirs = sourceSets.test.output + files(layout.buildDirectory.dir('classes/java/test'))
+
+    // Use template output + dependencies only (no assignment classes)
+    classpath = sourceSets.test.output + sourceSets.template.output + configurations.templateRuntimeClasspath + configurations.testRuntimeClasspath
+
+    useJUnitPlatform()
+    systemProperty 'glass.platform', glassPlatform
+    jvmArgs '-Dfile.encoding=UTF-8',
+            '-Djunit.jupiter.execution.parallel.enabled=false',
+            '--enable-native-access', 'ALL-UNNAMED'
+
+    // Inject JavaFX module path dynamically
+    def javaFxArgProvider = objects.newInstance(JavaFxModulePathArgumentProvider)
+    javaFxArgProvider.javaFxJars.from(configurations.testRuntimeClasspath)
+    jvmArgumentProviders.add(javaFxArgProvider)
+    include '**/b2j/test/TestManager.class'
+    finalizedBy jacocoTestReport
+}
+
+// ---------------------------------------------------------------------------
+// Enforcer-like check: verify no forbidden classes in main output
+// (equivalent to maven-enforcer-plugin requireFilesDontExist)
+// ---------------------------------------------------------------------------
+task enforceNoStudentCodeInTrustedPackages(type: Copy) {
+    description = 'Enforce that no trusted-package files exist in build output.'
+    group = 'verification'
+
+    dependsOn compileJava
+
+    doLast {
+        def outputDir = layout.buildDirectory.dir('classes/java/main').get().asFile
+        def forbiddenPaths = [
+            'ch/qos/logback/',
+            'com/intellij/',
+            'com/sun/',
+            'de/tum/in/test/api/',
+            'java/',
+            'javax/',
+            'jdk/',
+            'net/jqwik/',
+            'org/apache/',
+            'org/assertj/',
+            'org/eclipse/',
+            'org/jacoco/',
+            'org/json/',
+            'org/junit/',
+            'org/opentest4j/',
+            'sun/',
+            'org/gradle/',
+            'worker/org/gradle/',
+            'com/github/javaparser/'
+        ]
+
+        def violations = []
+        forbiddenPaths.each { path ->
+            def target = new File(outputDir, path)
+            if (target.exists()) {
+                violations.add("Forbidden file/directory found: ${target.path}")
+            }
         }
-        html.required.set(false)
+
+        if (!violations.isEmpty()) {
+            throw new org.gradle.api.GradleException(
+                "Enforcer check failed! Forbidden files detected:\n  - " + violations.join('\n  - ')
+            )
+        }
     }
 }
 
-pmd {
-    ruleSets = ["$scaConfigDirectory/pmd-configuration.xml"]
-    rulesMinimumPriority = 5
-    ignoreFailures = true
-    toolVersion = "7.16.0"
-}
+// Run enforcer after compilation
+check.dependsOn enforceNoStudentCodeInTrustedPackages
 
-tasks.named("pmdMain") {
+// ---------------------------------------------------------------------------
+// Jacoco report (optional, triggered by test.finalizedBy)
+// ---------------------------------------------------------------------------
+jacocoTestReport {
     reports {
-        xml.required.set(true)
-        xml.outputLocation.set(file("target/pmd.xml"))
+        xml.required = false
+        html.required = false
     }
 }
-
-tasks.named("pmdTest").configure {
-    enabled = false
-}
-
-publishing {
-    publications {
-        create("mavenJava", MavenPublication) {
-            groupId = "de.tum.in.ase"
-            artifactId = "Artemis-Java-Gradle-Template"
-            version = "1.6"
-            from components.java
-        }
-    }
-}
-
