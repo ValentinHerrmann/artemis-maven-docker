@@ -2,12 +2,7 @@ FROM maven:3.9.11-eclipse-temurin-25
 
 LABEL maintainer="Stephan Krusche <krusche@tum.de>"
 
-RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends gnupg \
-    && curl -fsSL -o /tmp/gradle-bin.zip https://services.gradle.org/distributions/gradle-9.0.0-bin.zip \
-    && unzip -q /tmp/gradle-bin.zip -d /opt \
-    && mv /opt/gradle-9.0.0 /opt/gradle \
-    && ln -s /opt/gradle/bin/gradle /usr/bin/gradle \
-    && rm /tmp/gradle-bin.zip \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends gnupg gradle \
     && rm -rf /var/lib/apt/lists/*
 
 ENV M2_HOME=/usr/share/maven
