@@ -2,13 +2,29 @@ FROM maven:3.9.11-eclipse-temurin-25
 
 LABEL maintainer="Stephan Krusche <krusche@tum.de>"
 
-RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends gnupg unzip \
-    && rm -rf /var/lib/apt/lists/* \
-    && wget -q https://services.gradle.org/distributions/gradle-9.0.0-bin.zip -O /tmp/gradle-bin.zip \
-    && unzip -q /tmp/gradle-bin.zip -d /opt \
-    && mv /opt/gradle-9.0.0 /opt/gradle \
-    && ln -s /opt/gradle/bin/gradle /usr/bin/gradle \
-    && rm /tmp/gradle-bin.zip
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends gnupg && \
+    rm -rf /var/lib/apt/lists/*
+
+
+    # 1. Install prerequisites, download Gradle, extract, and clean up in a single layer
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        default-jdk \
+        wget \
+        unzip \
+        ca-certificates && \
+    wget -q https://services.gradle.org/distributions/gradle-9.0.0-bin.zip -P /tmp && \
+    mkdir -p /opt/gradle && \
+    unzip -q -d /opt/gradle /tmp/gradle-9.0.0-bin.zip && \
+    rm -f /tmp/gradle-9.0.0-bin.zip && \
+    apt-get remove -y wget unzip && \
+    apt-get autoremove -y && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# 2. Set the environment variables so Gradle is available on the PATH
+ENV GRADLE_HOME=/opt/gradle/gradle-9.0.0
+ENV PATH=${GRADLE_HOME}/bin:${PATH}
 
 ENV M2_HOME=/usr/share/maven
 
